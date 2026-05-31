@@ -20,18 +20,24 @@ import {
 // Always run on demand — never cached or statically evaluated.
 export const dynamic = "force-dynamic";
 
-/** Accept the secret via `?secret=` or `Authorization: Bearer <secret>`. */
+// Accept the secret via `?secret=` (handy for browser testing) OR an
+// `Authorization: Bearer <secret>` header. Both are trimmed before comparing
+// so a stray newline/space in the env value or input doesn't cause a 401.
 function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
+  const secret = process.env.CRON_SECRET?.trim();
   if (!secret) return false;
 
-  const url = new URL(request.url);
-  if (url.searchParams.get("secret") === secret) return true;
+  // 1) Query parameter: ?secret=...
+  const querySecret = new URL(request.url).searchParams.get("secret")?.trim();
+  if (querySecret && querySecret === secret) return true;
 
+  // 2) Authorization: Bearer <secret>
   const auth = request.headers.get("authorization") ?? "";
   if (auth.toLowerCase().startsWith("bearer ")) {
-    return auth.slice(7).trim() === secret;
+    const headerSecret = auth.slice(7).trim();
+    if (headerSecret && headerSecret === secret) return true;
   }
+
   return false;
 }
 
