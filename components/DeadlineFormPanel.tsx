@@ -1,31 +1,54 @@
 "use client";
 
-import { useState } from "react";
-import type { Recurrence, Urgency } from "@/lib/types";
+import { useState, useTransition } from "react";
+import type {
+  Deadline,
+  DeadlineFormValues,
+  RecurrenceType,
+  Urgency,
+} from "@/lib/types";
 import { WEEKDAYS, toISODate } from "@/lib/dateUtils";
+import {
+  createDeadline,
+  deleteDeadline,
+  updateDeadline,
+} from "@/app/actions";
 
-interface NewDeadlineModalProps {
-  open: boolean;
+interface DeadlineFormPanelProps {
+  userEmail: string;
+  /** null = creating a new deadline; otherwise editing this one. */
+  deadline: Deadline | null;
   onClose: () => void;
 }
 
-type RecurrenceKind = "none" | "weekly" | "monthly";
-
-export default function NewDeadlineModal({
-  open,
+export default function DeadlineFormPanel({
+  userEmail,
+  deadline,
   onClose,
-}: NewDeadlineModalProps) {
-  const [title, setTitle] = useState("");
-  const [deadlineDate, setDeadlineDate] = useState(toISODate(new Date()));
-  const [recurrenceKind, setRecurrenceKind] = useState<RecurrenceKind>("none");
-  const [weekday, setWeekday] = useState(4); // Thursday
-  const [monthDay, setMonthDay] = useState(1);
-  const [leadDays, setLeadDays] = useState(1);
-  const [urgency, setUrgency] = useState<Urgency>("regular");
-  const [recipients, setRecipients] = useState<string[]>(["me@example.com"]);
+}: DeadlineFormPanelProps) {
+  const isEditing = deadline !== null;
+
+  const [title, setTitle] = useState(deadline?.title ?? "");
+  const [deadlineDate, setDeadlineDate] = useState(
+    deadline?.deadlineDate ?? toISODate(new Date())
+  );
+  const [recurrence, setRecurrence] = useState<RecurrenceType>(
+    deadline?.recurrence ?? "none"
+  );
+  const [weekday, setWeekday] = useState(deadline?.weekday ?? 4); // Thursday
+  const [dayOfMonth, setDayOfMonth] = useState(deadline?.dayOfMonth ?? 1);
+  const [leadDays, setLeadDays] = useState(deadline?.leadDays ?? 1);
+  const [urgency, setUrgency] = useState<Urgency>(
+    deadline?.urgency ?? "regular"
+  );
+  // Recipients default to the user's own email for a new deadline.
+  const [recipients, setRecipients] = useState<string[]>(
+    deadline?.recipients ?? (userEmail ? [userEmail] : [])
+  );
   const [emailDraft, setEmailDraft] = useState("");
 
-  if (!open) return null;
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   function addRecipient() {
     const value = emailDraft.trim();
@@ -38,19 +61,58 @@ export default function NewDeadlineModal({
     setRecipients((prev) => prev.filter((e) => e !== email));
   }
 
-  // UI only — no submission logic yet. Just close the panel.
   function handleSave() {
-    onClose();
+    setError(null);
+
+    // Fold any half-typed email into the list before saving.
+    const pendingEmail = emailDraft.trim();
+    const finalRecipients =
+      pendingEmail && !recipients.includes(pendingEmail)
+        ? [...recipients, pendingEmail]
+        : recipients;
+
+    if (!title.trim()) {
+      setError("Please give your deadline a title.");
+      return;
+    }
+
+    const values: DeadlineFormValues = {
+      title,
+      deadlineDate,
+      recurrence,
+      weekday,
+      dayOfMonth,
+      leadDays,
+      urgency,
+      recipients: finalRecipients,
+    };
+
+    startTransition(async () => {
+      const result = isEditing
+        ? await updateDeadline(deadline.id, values)
+        : await createDeadline(values);
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        onClose();
+      }
+    });
   }
 
-  // Build a preview of the recurrence value (illustrative only).
-  const recurrence: Recurrence =
-    recurrenceKind === "none"
-      ? { type: "none" }
-      : recurrenceKind === "weekly"
-      ? { type: "weekly", weekday }
-      : { type: "monthly", day: monthDay };
-  void recurrence;
+  function handleDelete() {
+    if (!deadline) return;
+    if (!confirm(`Delete “${deadline.title}”?`)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteDeadline(deadline.id);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        onClose();
+      }
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -64,7 +126,9 @@ export default function NewDeadlineModal({
       {/* Slide-over panel */}
       <div className="relative ml-auto flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-          <h2 className="text-lg font-semibold text-slate-900">New deadline</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            {isEditing ? "Edit deadline" : "New deadline"}
+          </h2>
           <button
             onClick={onClose}
             aria-label="Close"
@@ -100,15 +164,15 @@ export default function NewDeadlineModal({
           <Field label="Recurrence">
             <div className="flex flex-col gap-2">
               <SegmentedControl
-                value={recurrenceKind}
-                onChange={(v) => setRecurrenceKind(v as RecurrenceKind)}
+                value={recurrence}
+                onChange={(v) => setRecurrence(v as RecurrenceType)}
                 options={[
                   { value: "none", label: "One-off" },
                   { value: "weekly", label: "Weekly" },
                   { value: "monthly", label: "Monthly" },
                 ]}
               />
-              {recurrenceKind === "weekly" && (
+              {recurrence === "weekly" && (
                 <select
                   value={weekday}
                   onChange={(e) => setWeekday(Number(e.target.value))}
@@ -121,10 +185,10 @@ export default function NewDeadlineModal({
                   ))}
                 </select>
               )}
-              {recurrenceKind === "monthly" && (
+              {recurrence === "monthly" && (
                 <select
-                  value={monthDay}
-                  onChange={(e) => setMonthDay(Number(e.target.value))}
+                  value={dayOfMonth}
+                  onChange={(e) => setDayOfMonth(Number(e.target.value))}
                   className={inputClass}
                 >
                   {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
@@ -170,10 +234,7 @@ export default function NewDeadlineModal({
           </Field>
 
           {/* Recipients */}
-          <Field
-            label="Recipient emails"
-            hint="Who should get the nag emails."
-          >
+          <Field label="Recipient emails" hint="Who should get the nag emails.">
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
                 <input
@@ -205,6 +266,9 @@ export default function NewDeadlineModal({
                       className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 py-1 pl-3 pr-1.5 text-sm text-accent-700"
                     >
                       {email}
+                      {email === userEmail && (
+                        <span className="text-xs text-accent-400">you</span>
+                      )}
                       <button
                         type="button"
                         onClick={() => removeRecipient(email)}
@@ -219,22 +283,47 @@ export default function NewDeadlineModal({
               )}
             </div>
           </Field>
+
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              {error}
+            </p>
+          )}
         </div>
 
         {/* Footer actions */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-          <button
-            onClick={onClose}
-            className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="rounded-xl bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-600"
-          >
-            Create deadline
-          </button>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-6 py-4">
+          <div>
+            {isEditing && (
+              <button
+                onClick={handleDelete}
+                disabled={pending}
+                className="rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              disabled={pending}
+              className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={pending}
+              className="rounded-xl bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {pending
+                ? "Saving…"
+                : isEditing
+                ? "Save changes"
+                : "Create deadline"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -296,13 +385,7 @@ function SegmentedControl({
 
 function CloseIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-    >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M18 6L6 18M6 6l12 12"
         stroke="currentColor"

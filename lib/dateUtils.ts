@@ -1,4 +1,4 @@
-import type { Deadline, Recurrence } from "./types";
+import type { Deadline, RecurrenceType } from "./types";
 
 export const WEEKDAYS = [
   "Sunday",
@@ -55,18 +55,6 @@ export function addDays(date: Date, days: number): Date {
   return next;
 }
 
-/** The nag day for a deadline = deadline date minus the lead time. */
-export function nagDate(d: Deadline): string {
-  return toISODate(addDays(fromISODate(d.deadline), -d.leadDays));
-}
-
-/** Date of the next upcoming `weekday` (0..6), starting from `from`. */
-export function nextWeekday(weekday: number, from = new Date()): Date {
-  const base = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const diff = (weekday - base.getDay() + 7) % 7 || 7;
-  return addDays(base, diff);
-}
-
 export function isSameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -75,16 +63,20 @@ export function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
-export function describeRecurrence(r: Recurrence): string {
-  switch (r.type) {
+export function describeRecurrence(d: {
+  recurrence: RecurrenceType;
+  weekday: number | null;
+  dayOfMonth: number | null;
+}): string {
+  switch (d.recurrence) {
     case "none":
       return "One-off";
     case "weekly":
-      return `Every ${WEEKDAYS[r.weekday]}`;
-    case "monthly": {
-      const suffix = ordinalSuffix(r.day);
-      return `${r.day}${suffix} of every month`;
-    }
+      return d.weekday == null ? "Weekly" : `Every ${WEEKDAYS[d.weekday]}`;
+    case "monthly":
+      return d.dayOfMonth == null
+        ? "Monthly"
+        : `${d.dayOfMonth}${ordinalSuffix(d.dayOfMonth)} of every month`;
   }
 }
 
@@ -111,24 +103,98 @@ export function formatDateLabel(iso: string): string {
   ].slice(0, 3)}`;
 }
 
+/** A short label for the next upcoming occurrence of a deadline. */
+export function nextOccurrenceLabel(d: Deadline, from = new Date()): string {
+  const base = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  // Look ahead far enough to find the next monthly/weekly hit.
+  for (let i = 0; i < 366; i++) {
+    const day = addDays(base, i);
+    if (occursOn(d, day)) return formatDateLabel(toISODate(day));
+  }
+  return formatDateLabel(d.deadlineDate);
+}
+
+/** Does this deadline have an occurrence on the given date? */
+export function occursOn(d: Deadline, date: Date): boolean {
+  switch (d.recurrence) {
+    case "none":
+      return d.deadlineDate === toISODate(date);
+    case "weekly":
+      return d.weekday != null && date.getDay() === d.weekday;
+    case "monthly":
+      return d.dayOfMonth != null && date.getDate() === d.dayOfMonth;
+  }
+}
+
+/** All ISO dates in the given month where this deadline occurs. */
+export function occurrencesForMonth(
+  d: Deadline,
+  year: number,
+  month: number
+): string[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const out: string[] = [];
+
+  if (d.recurrence === "none") {
+    const dd = fromISODate(d.deadlineDate);
+    if (dd.getFullYear() === year && dd.getMonth() === month) {
+      out.push(d.deadlineDate);
+    }
+  } else if (d.recurrence === "weekly" && d.weekday != null) {
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      if (date.getDay() === d.weekday) out.push(toISODate(date));
+    }
+  } else if (d.recurrence === "monthly" && d.dayOfMonth != null) {
+    if (d.dayOfMonth <= daysInMonth) {
+      out.push(toISODate(new Date(year, month, d.dayOfMonth)));
+    }
+  }
+  return out;
+}
+
 export interface DayMarkers {
-  /** A deadline falls on this day. */
-  deadlines: Deadline[];
-  /** A nag/reminder day for these deadlines. */
+  /** Deadlines whose deadline date falls on this day → 🚩. */
+  flags: Deadline[];
+  /** Deadlines whose nag day (deadline − lead_days) falls on this day. */
   nags: Deadline[];
 }
 
-/** Compute which deadlines flag or nag on a given ISO date. */
-export function markersForDate(deadlines: Deadline[], iso: string): DayMarkers {
-  return {
-    deadlines: deadlines.filter((d) => d.deadline === iso),
-    nags: deadlines.filter((d) => nagDate(d) === iso),
-  };
-}
+/**
+ * Build a lookup of markers per ISO date for the month being viewed.
+ * Occurrences are computed across the previous, current and next month so
+ * that nag days spilling across month boundaries still render correctly.
+ */
+export function buildMonthMarkers(
+  deadlines: Deadline[],
+  viewYear: number,
+  viewMonth: number
+): Map<string, DayMarkers> {
+  const map = new Map<string, DayMarkers>();
 
-/** The status emoji(s) shown on a nag day. */
-export function nagEmoji(d: Deadline): string {
-  if (d.status === "done") return "✅";
-  if (d.remindersSent <= 0) return "❗";
-  return "❗".repeat(Math.min(d.remindersSent, 3));
+  const ensure = (iso: string): DayMarkers => {
+    let entry = map.get(iso);
+    if (!entry) {
+      entry = { flags: [], nags: [] };
+      map.set(iso, entry);
+    }
+    return entry;
+  };
+
+  // Window: previous, current, next month.
+  for (let offset = -1; offset <= 1; offset++) {
+    const ref = new Date(viewYear, viewMonth + offset, 1);
+    const y = ref.getFullYear();
+    const m = ref.getMonth();
+
+    for (const d of deadlines) {
+      for (const iso of occurrencesForMonth(d, y, m)) {
+        ensure(iso).flags.push(d);
+        const nagIso = toISODate(addDays(fromISODate(iso), -d.leadDays));
+        ensure(nagIso).nags.push(d);
+      }
+    }
+  }
+
+  return map;
 }

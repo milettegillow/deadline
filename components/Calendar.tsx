@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Deadline } from "@/lib/types";
 import {
   MONTHS,
   WEEKDAYS_SHORT,
+  buildMonthMarkers,
   isSameDay,
-  markersForDate,
-  nagEmoji,
   toISODate,
 } from "@/lib/dateUtils";
 
@@ -24,11 +23,16 @@ export default function Calendar({ deadlines }: CalendarProps) {
   const startWeekday = firstOfMonth.getDay(); // 0 = Sunday
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
+  const markers = useMemo(
+    () => buildMonthMarkers(deadlines, viewYear, viewMonth),
+    [deadlines, viewYear, viewMonth]
+  );
+
   // Leading blanks so the 1st lands under the right weekday column.
   const cells: (Date | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(viewYear, viewMonth, d));
-  // Trailing blanks to complete the final week row.
+  for (let d = 1; d <= daysInMonth; d++)
+    cells.push(new Date(viewYear, viewMonth, d));
   while (cells.length % 7 !== 0) cells.push(null);
 
   function goToMonth(delta: number) {
@@ -100,9 +104,11 @@ export default function Calendar({ deadlines }: CalendarProps) {
           if (!date) return <div key={`blank-${i}`} className="aspect-square" />;
 
           const iso = toISODate(date);
-          const { deadlines: dueToday, nags } = markersForDate(deadlines, iso);
+          const day = markers.get(iso);
+          const flags = day?.flags ?? [];
+          const nags = day?.nags ?? [];
           const isToday = isSameDay(date, today);
-          const hasUrgentDue = dueToday.some((d) => d.urgency === "urgent");
+          const hasUrgent = flags.some((d) => d.urgency === "urgent");
 
           return (
             <div
@@ -126,30 +132,24 @@ export default function Calendar({ deadlines }: CalendarProps) {
               </span>
 
               {/* Markers */}
-              <div className="mt-auto flex flex-wrap gap-0.5 text-sm leading-none">
-                {dueToday.map((d) => (
+              <div className="mt-auto flex flex-wrap items-center gap-0.5 text-sm leading-none">
+                {flags.map((d, idx) => (
                   <span
-                    key={`due-${d.id}`}
-                    title={`${d.title} — due today`}
+                    key={`flag-${d.id}-${idx}`}
+                    title={`${d.title} — due`}
                     className="leading-none"
                   >
-                    {hasUrgentDue && d.urgency === "urgent" ? "🚨" : "🚩"}
+                    {hasUrgent && d.urgency === "urgent" ? "🚨" : "🚩"}
                   </span>
                 ))}
-                {nags.map((d) => (
+                {/* Nag day: placeholder slot for status emojis (wired up later). */}
+                {nags.map((d, idx) => (
                   <span
-                    key={`nag-${d.id}`}
-                    title={
-                      d.status === "done"
-                        ? `${d.title} — done`
-                        : `${d.title} — ${d.remindersSent} reminder${
-                            d.remindersSent === 1 ? "" : "s"
-                          } sent`
-                    }
-                    className="leading-none"
-                  >
-                    {nagEmoji(d)}
-                  </span>
+                    key={`nag-${d.id}-${idx}`}
+                    title={`${d.title} — reminder day`}
+                    aria-label="reminder slot"
+                    className="inline-block h-3 w-3 rounded-full border border-dashed border-slate-300"
+                  />
                 ))}
               </div>
             </div>
@@ -161,9 +161,7 @@ export default function Calendar({ deadlines }: CalendarProps) {
       <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs text-slate-500">
         <LegendItem emoji="🚩" label="Deadline" />
         <LegendItem emoji="🚨" label="Urgent deadline" />
-        <LegendItem emoji="❗" label="Reminder sent" />
-        <LegendItem emoji="❗❗❗" label="Several reminders" />
-        <LegendItem emoji="✅" label="Done" />
+        <LegendSlot label="Reminder day (status coming soon)" />
       </div>
     </div>
   );
@@ -173,6 +171,15 @@ function LegendItem({ emoji, label }: { emoji: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="leading-none">{emoji}</span>
+      {label}
+    </span>
+  );
+}
+
+function LegendSlot({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-block h-3 w-3 rounded-full border border-dashed border-slate-300" />
       {label}
     </span>
   );
