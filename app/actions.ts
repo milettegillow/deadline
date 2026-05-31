@@ -3,11 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { rowToDeadline, type DeadlineFormValues, type DeadlineRow } from "@/lib/types";
+import {
+  DEADLINE_SELECT,
+  rowToDeadline,
+  type DeadlineFormValues,
+  type DeadlineRow,
+} from "@/lib/types";
 import { sendDeadlineEmail } from "@/lib/email";
-
-const DEADLINE_SELECT =
-  "id, title, deadline_date, recurrence, weekday, day_of_month, lead_days, urgency, created_at, deadline_recipients(id, email)";
+import { currentOccurrenceDate } from "@/lib/engine";
 
 export interface ActionResult {
   error?: string;
@@ -169,6 +172,46 @@ export async function sendTestReminder(
     };
   }
 
+  return {};
+}
+
+/**
+ * Mark the deadline's CURRENT occurrence as done, stopping further reminders.
+ * Upserts the occurrence row (it may not exist yet if no reminder has fired).
+ * Notifying other recipients with a 'completed' email is a later prompt.
+ */
+export async function markOccurrenceDone(
+  deadlineId: string
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: row, error: rowErr } = await supabase
+    .from("deadlines")
+    .select(DEADLINE_SELECT)
+    .eq("id", deadlineId)
+    .single();
+  if (rowErr || !row) return { error: "Deadline not found." };
+
+  const deadline = rowToDeadline(row as DeadlineRow);
+  const occurrenceDate = currentOccurrenceDate(deadline);
+  if (!occurrenceDate) return { error: "No current occurrence to mark." };
+
+  const { error } = await supabase.from("occurrences").upsert(
+    {
+      deadline_id: deadlineId,
+      occurrence_date: occurrenceDate,
+      status: "done",
+      done_at: new Date().toISOString(),
+    },
+    { onConflict: "deadline_id,occurrence_date" }
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath("/");
   return {};
 }
 

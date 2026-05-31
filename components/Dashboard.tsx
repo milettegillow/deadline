@@ -5,14 +5,19 @@ import Calendar from "@/components/Calendar";
 import DeadlineList from "@/components/DeadlineList";
 import DeadlineFormPanel from "@/components/DeadlineFormPanel";
 import SignOutButton from "@/components/SignOutButton";
-import type { Deadline } from "@/lib/types";
+import type { Deadline, Occurrence } from "@/lib/types";
 
 interface DashboardProps {
   userEmail: string;
   deadlines: Deadline[];
+  occurrences: Occurrence[];
 }
 
-export default function Dashboard({ userEmail, deadlines }: DashboardProps) {
+export default function Dashboard({
+  userEmail,
+  deadlines,
+  occurrences,
+}: DashboardProps) {
   // `null` = panel closed. A Deadline = editing it. "new" = creating.
   const [editing, setEditing] = useState<Deadline | "new" | null>(null);
 
@@ -59,9 +64,10 @@ export default function Dashboard({ userEmail, deadlines }: DashboardProps) {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-          <Calendar deadlines={deadlines} />
+          <Calendar deadlines={deadlines} occurrences={occurrences} />
           <DeadlineList
             deadlines={deadlines}
+            occurrences={occurrences}
             onEdit={(d) => setEditing(d)}
             onNew={() => setEditing("new")}
           />

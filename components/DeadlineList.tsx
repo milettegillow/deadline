@@ -1,21 +1,39 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Deadline } from "@/lib/types";
-import { describeRecurrence, nextOccurrenceLabel } from "@/lib/dateUtils";
-import { deleteDeadline, sendTestReminder } from "@/app/actions";
+import { stagesSent, type Deadline, type Occurrence } from "@/lib/types";
+import {
+  currentOccurrenceDate,
+  describeRecurrence,
+  nextOccurrenceLabel,
+} from "@/lib/dateUtils";
+import {
+  deleteDeadline,
+  markOccurrenceDone,
+  sendTestReminder,
+} from "@/app/actions";
 
 interface DeadlineListProps {
   deadlines: Deadline[];
+  occurrences: Occurrence[];
   onEdit: (d: Deadline) => void;
   onNew: () => void;
 }
 
 export default function DeadlineList({
   deadlines,
+  occurrences,
   onEdit,
   onNew,
 }: DeadlineListProps) {
+  const occByKey = new Map<string, Occurrence>();
+  for (const o of occurrences) {
+    occByKey.set(`${o.deadlineId}|${o.occurrenceDate}`, o);
+  }
+  const currentOccurrence = (d: Deadline): Occurrence | undefined => {
+    const date = currentOccurrenceDate(d);
+    return date ? occByKey.get(`${d.id}|${date}`) : undefined;
+  };
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
       <h2 className="mb-4 text-lg font-semibold text-slate-900">
@@ -35,7 +53,12 @@ export default function DeadlineList({
       ) : (
         <ul className="flex flex-col gap-3">
           {deadlines.map((d) => (
-            <DeadlineRow key={d.id} deadline={d} onEdit={onEdit} />
+            <DeadlineRow
+              key={d.id}
+              deadline={d}
+              occurrence={currentOccurrence(d)}
+              onEdit={onEdit}
+            />
           ))}
         </ul>
       )}
@@ -45,21 +68,33 @@ export default function DeadlineList({
 
 function DeadlineRow({
   deadline: d,
+  occurrence,
   onEdit,
 }: {
   deadline: Deadline;
+  occurrence: Occurrence | undefined;
   onEdit: (d: Deadline) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [testPending, startTestTransition] = useTransition();
+  const [donePending, startDoneTransition] = useTransition();
   const [testStatus, setTestStatus] = useState<
     { kind: "ok" | "error"; message: string } | null
   >(null);
+
+  const isDone = occurrence?.status === "done";
+  const sent = occurrence ? stagesSent(occurrence) : 0;
 
   function handleDelete() {
     if (!confirm(`Delete “${d.title}”?`)) return;
     startTransition(() => {
       deleteDeadline(d.id);
+    });
+  }
+
+  function handleMarkDone() {
+    startDoneTransition(() => {
+      markOccurrenceDone(d.id);
     });
   }
 
@@ -103,6 +138,21 @@ function DeadlineRow({
               {d.recipients.length === 1 ? "" : "s"}
             </p>
           )}
+          <div className="mt-1.5 text-xs">
+            {isDone ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                ✅ Done
+              </span>
+            ) : sent > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+                {"❗".repeat(sent)} Nagging
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">
+                Scheduled
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -126,6 +176,16 @@ function DeadlineRow({
 
       {/* Test-only: send the 'reminder' template now to check delivery. */}
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
+        {!isDone && (
+          <button
+            onClick={handleMarkDone}
+            disabled={donePending}
+            className="inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-emerald-600 transition hover:text-emerald-700 disabled:opacity-60"
+          >
+            <CheckIcon />
+            {donePending ? "Saving…" : "Mark done"}
+          </button>
+        )}
         <button
           onClick={handleTest}
           disabled={testPending}
@@ -147,6 +207,20 @@ function DeadlineRow({
         )}
       </div>
     </li>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M20 6L9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

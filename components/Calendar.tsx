@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Deadline } from "@/lib/types";
+import type { Deadline, Occurrence } from "@/lib/types";
 import {
   MONTHS,
   WEEKDAYS_SHORT,
@@ -12,9 +12,10 @@ import {
 
 interface CalendarProps {
   deadlines: Deadline[];
+  occurrences: Occurrence[];
 }
 
-export default function Calendar({ deadlines }: CalendarProps) {
+export default function Calendar({ deadlines, occurrences }: CalendarProps) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -24,8 +25,8 @@ export default function Calendar({ deadlines }: CalendarProps) {
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
   const markers = useMemo(
-    () => buildMonthMarkers(deadlines, viewYear, viewMonth),
-    [deadlines, viewYear, viewMonth]
+    () => buildMonthMarkers(deadlines, occurrences, viewYear, viewMonth),
+    [deadlines, occurrences, viewYear, viewMonth]
   );
 
   // Leading blanks so the 1st lands under the right weekday column.
@@ -108,7 +109,7 @@ export default function Calendar({ deadlines }: CalendarProps) {
           const flags = day?.flags ?? [];
           const nags = day?.nags ?? [];
           const isToday = isSameDay(date, today);
-          const hasUrgent = flags.some((d) => d.urgency === "urgent");
+          const hasUrgent = flags.some((f) => f.deadline.urgency === "urgent");
 
           return (
             <div
@@ -133,24 +134,50 @@ export default function Calendar({ deadlines }: CalendarProps) {
 
               {/* Markers */}
               <div className="mt-auto flex flex-wrap items-center gap-0.5 text-sm leading-none">
-                {flags.map((d, idx) => (
+                {flags.map((f, idx) => (
                   <span
-                    key={`flag-${d.id}-${idx}`}
-                    title={`${d.title} — due`}
+                    key={`flag-${f.deadline.id}-${idx}`}
+                    title={`${f.deadline.title} — due`}
                     className="leading-none"
                   >
-                    {hasUrgent && d.urgency === "urgent" ? "🚨" : "🚩"}
+                    {hasUrgent && f.deadline.urgency === "urgent" ? "🚨" : "🚩"}
                   </span>
                 ))}
-                {/* Nag day: placeholder slot for status emojis (wired up later). */}
-                {nags.map((d, idx) => (
-                  <span
-                    key={`nag-${d.id}-${idx}`}
-                    title={`${d.title} — reminder day`}
-                    aria-label="reminder slot"
-                    className="inline-block h-3 w-3 rounded-full border border-dashed border-slate-300"
-                  />
-                ))}
+                {nags.map((n, idx) => {
+                  if (n.done) {
+                    return (
+                      <span
+                        key={`nag-${n.deadline.id}-${idx}`}
+                        title={`${n.deadline.title} — done`}
+                        className="leading-none"
+                      >
+                        ✅
+                      </span>
+                    );
+                  }
+                  if (n.stagesSent > 0) {
+                    return (
+                      <span
+                        key={`nag-${n.deadline.id}-${idx}`}
+                        title={`${n.deadline.title} — ${n.stagesSent} reminder${
+                          n.stagesSent === 1 ? "" : "s"
+                        } sent`}
+                        className="leading-none"
+                      >
+                        {"❗".repeat(n.stagesSent)}
+                      </span>
+                    );
+                  }
+                  // No reminder sent yet — keep the empty placeholder slot.
+                  return (
+                    <span
+                      key={`nag-${n.deadline.id}-${idx}`}
+                      title={`${n.deadline.title} — reminder day`}
+                      aria-label="reminder slot"
+                      className="inline-block h-3 w-3 rounded-full border border-dashed border-slate-300"
+                    />
+                  );
+                })}
               </div>
             </div>
           );
@@ -161,7 +188,9 @@ export default function Calendar({ deadlines }: CalendarProps) {
       <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs text-slate-500">
         <LegendItem emoji="🚩" label="Deadline" />
         <LegendItem emoji="🚨" label="Urgent deadline" />
-        <LegendSlot label="Reminder day (status coming soon)" />
+        <LegendItem emoji="❗" label="Reminder sent" />
+        <LegendItem emoji="✅" label="Done" />
+        <LegendSlot label="Reminder day" />
       </div>
     </div>
   );

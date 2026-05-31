@@ -46,6 +46,63 @@ export interface DeadlineFormValues {
   recipients: string[];
 }
 
+/** Column list for selecting a deadline plus its joined recipients. */
+export const DEADLINE_SELECT =
+  "id, title, deadline_date, recurrence, weekday, day_of_month, lead_days, urgency, created_at, deadline_recipients(id, email)";
+
+export type OccurrenceStatus = "pending" | "done";
+
+/** Row shape of the `occurrences` table. */
+export interface OccurrenceRow {
+  id: string;
+  deadline_id: string;
+  occurrence_date: string;
+  status: OccurrenceStatus;
+  reminder_sent_at: string | null;
+  follow_up_sent_at: string | null;
+  last_chance_sent_at: string | null;
+  due_today_sent_at: string | null;
+  done_at: string | null;
+  created_at: string;
+}
+
+/** Occurrence as used by the UI. */
+export interface Occurrence {
+  id: string;
+  deadlineId: string;
+  occurrenceDate: string;
+  status: OccurrenceStatus;
+  reminderSentAt: string | null;
+  followUpSentAt: string | null;
+  lastChanceSentAt: string | null;
+  dueTodaySentAt: string | null;
+  doneAt: string | null;
+}
+
+export const OCCURRENCE_SELECT =
+  "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at";
+
+export function rowToOccurrence(r: OccurrenceRow): Occurrence {
+  return {
+    id: r.id,
+    deadlineId: r.deadline_id,
+    occurrenceDate: r.occurrence_date,
+    status: r.status,
+    reminderSentAt: r.reminder_sent_at,
+    followUpSentAt: r.follow_up_sent_at,
+    lastChanceSentAt: r.last_chance_sent_at,
+    dueTodaySentAt: r.due_today_sent_at,
+    doneAt: r.done_at,
+  };
+}
+
+/** Number of nag-day reminder stages sent for an occurrence (0..3). */
+export function stagesSent(o: Occurrence): number {
+  return [o.reminderSentAt, o.followUpSentAt, o.lastChanceSentAt].filter(
+    Boolean
+  ).length;
+}
+
 /** Map a database row to the UI `Deadline` shape. */
 export function rowToDeadline(row: DeadlineRow): Deadline {
   return {

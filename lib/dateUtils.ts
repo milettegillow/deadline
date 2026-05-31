@@ -1,4 +1,4 @@
-import type { Deadline, RecurrenceType } from "./types";
+import { stagesSent, type Deadline, type Occurrence, type RecurrenceType } from "./types";
 
 export const WEEKDAYS = [
   "Sunday",
@@ -153,25 +153,58 @@ export function occurrencesForMonth(
   return out;
 }
 
+/** The deadline_date of the occurrence currently in play (client-local). */
+export function currentOccurrenceDate(
+  d: Deadline,
+  from = new Date()
+): string | null {
+  if (d.recurrence === "none") return d.deadlineDate;
+  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  for (let i = 0; i < 366; i++) {
+    const date = addDays(today, i);
+    if (occursOn(d, date)) return toISODate(date);
+  }
+  return null;
+}
+
+export interface FlagMark {
+  deadline: Deadline;
+  occurrenceDate: string;
+}
+
+export interface NagMark {
+  deadline: Deadline;
+  occurrenceDate: string;
+  /** Nag-day stages sent so far (0..3) → ❗ count. */
+  stagesSent: number;
+  done: boolean;
+}
+
 export interface DayMarkers {
-  /** Deadlines whose deadline date falls on this day → 🚩. */
-  flags: Deadline[];
-  /** Deadlines whose nag day (deadline − lead_days) falls on this day. */
-  nags: Deadline[];
+  /** A deadline date falls on this day → 🚩. */
+  flags: FlagMark[];
+  /** A nag day (deadline − lead_days) falls on this day → ❗/✅. */
+  nags: NagMark[];
 }
 
 /**
- * Build a lookup of markers per ISO date for the month being viewed.
- * Occurrences are computed across the previous, current and next month so
- * that nag days spilling across month boundaries still render correctly.
+ * Build a lookup of markers per ISO date for the month being viewed, enriched
+ * with each occurrence's send/done status. Occurrences are computed across the
+ * previous, current and next month so nag days that spill across month
+ * boundaries still render correctly.
  */
 export function buildMonthMarkers(
   deadlines: Deadline[],
+  occurrences: Occurrence[],
   viewYear: number,
   viewMonth: number
 ): Map<string, DayMarkers> {
-  const map = new Map<string, DayMarkers>();
+  const occByKey = new Map<string, Occurrence>();
+  for (const o of occurrences) {
+    occByKey.set(`${o.deadlineId}|${o.occurrenceDate}`, o);
+  }
 
+  const map = new Map<string, DayMarkers>();
   const ensure = (iso: string): DayMarkers => {
     let entry = map.get(iso);
     if (!entry) {
@@ -189,9 +222,16 @@ export function buildMonthMarkers(
 
     for (const d of deadlines) {
       for (const iso of occurrencesForMonth(d, y, m)) {
-        ensure(iso).flags.push(d);
+        const occ = occByKey.get(`${d.id}|${iso}`);
+        ensure(iso).flags.push({ deadline: d, occurrenceDate: iso });
+
         const nagIso = toISODate(addDays(fromISODate(iso), -d.leadDays));
-        ensure(nagIso).nags.push(d);
+        ensure(nagIso).nags.push({
+          deadline: d,
+          occurrenceDate: iso,
+          stagesSent: occ ? stagesSent(occ) : 0,
+          done: occ?.status === "done",
+        });
       }
     }
   }
