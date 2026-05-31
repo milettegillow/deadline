@@ -50,7 +50,7 @@ export interface DeadlineFormValues {
 export const DEADLINE_SELECT =
   "id, title, deadline_date, recurrence, weekday, day_of_month, lead_days, urgency, created_at, deadline_recipients(id, email)";
 
-export type OccurrenceStatus = "pending" | "done";
+export type OccurrenceStatus = "pending" | "done" | "skipped";
 
 /** Row shape of the `occurrences` table. */
 export interface OccurrenceRow {
@@ -63,6 +63,7 @@ export interface OccurrenceRow {
   last_chance_sent_at: string | null;
   due_today_sent_at: string | null;
   done_at: string | null;
+  skipped_at: string | null;
   done_token: string;
   created_at: string;
 }
@@ -78,11 +79,12 @@ export interface Occurrence {
   lastChanceSentAt: string | null;
   dueTodaySentAt: string | null;
   doneAt: string | null;
+  skippedAt: string | null;
   doneToken: string;
 }
 
 export const OCCURRENCE_SELECT =
-  "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, done_token";
+  "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, skipped_at, done_token";
 
 export function rowToOccurrence(r: OccurrenceRow): Occurrence {
   return {
@@ -95,6 +97,7 @@ export function rowToOccurrence(r: OccurrenceRow): Occurrence {
     lastChanceSentAt: r.last_chance_sent_at,
     dueTodaySentAt: r.due_today_sent_at,
     doneAt: r.done_at,
+    skippedAt: r.skipped_at,
     doneToken: r.done_token,
   };
 }

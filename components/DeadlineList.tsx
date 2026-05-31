@@ -11,6 +11,7 @@ import {
   deleteDeadline,
   markOccurrenceDone,
   sendTestReminder,
+  skipOccurrence,
 } from "@/app/actions";
 
 interface DeadlineListProps {
@@ -78,11 +79,14 @@ function DeadlineRow({
   const [pending, startTransition] = useTransition();
   const [testPending, startTestTransition] = useTransition();
   const [donePending, startDoneTransition] = useTransition();
+  const [skipPending, startSkipTransition] = useTransition();
   const [testStatus, setTestStatus] = useState<
     { kind: "ok" | "error"; message: string } | null
   >(null);
 
   const isDone = occurrence?.status === "done";
+  const isSkipped = occurrence?.status === "skipped";
+  const isResolved = isDone || isSkipped;
   const sent = occurrence ? stagesSent(occurrence) : 0;
 
   function handleDelete() {
@@ -95,6 +99,13 @@ function DeadlineRow({
   function handleMarkDone() {
     startDoneTransition(() => {
       markOccurrenceDone(d.id);
+    });
+  }
+
+  function handleSkip() {
+    if (!confirm(`Skip “${d.title}” this time?`)) return;
+    startSkipTransition(() => {
+      skipOccurrence(d.id);
     });
   }
 
@@ -143,6 +154,10 @@ function DeadlineRow({
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
                 ✅ Done
               </span>
+            ) : isSkipped ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">
+                <span className="grayscale opacity-60">⏭️</span> Skipped
+              </span>
             ) : sent > 0 ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
                 {"❗".repeat(sent)} Nagging
@@ -176,7 +191,7 @@ function DeadlineRow({
 
       {/* Test-only: send the 'reminder' template now to check delivery. */}
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
-        {!isDone && (
+        {!isResolved && (
           <button
             onClick={handleMarkDone}
             disabled={donePending}
@@ -184,6 +199,16 @@ function DeadlineRow({
           >
             <CheckIcon />
             {donePending ? "Saving…" : "Mark done"}
+          </button>
+        )}
+        {!isResolved && (
+          <button
+            onClick={handleSkip}
+            disabled={skipPending}
+            className="inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-slate-500 transition hover:text-slate-700 disabled:opacity-60"
+          >
+            <SkipIcon />
+            {skipPending ? "Skipping…" : "Skip this one"}
           </button>
         )}
         <button
@@ -217,6 +242,20 @@ function CheckIcon() {
         d="M20 6L9 17l-5-5"
         stroke="currentColor"
         strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SkipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 4l10 8-10 8V4zM19 5v14"
+        stroke="currentColor"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

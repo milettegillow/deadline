@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /** Public routes that an unauthenticated visitor may reach. */
-const PUBLIC_PATHS = ["/login", "/auth", "/done"];
+const PUBLIC_PATHS = ["/login", "/auth", "/done", "/skip"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some(

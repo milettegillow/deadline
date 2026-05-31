@@ -30,8 +30,16 @@ const HAS_DONE_BUTTON: Record<EmailType, boolean> = {
 
 /** Absolute URL a recipient taps to mark an occurrence done (no login needed). */
 export function doneUrl(doneToken: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
-  return `${base}/done/${doneToken}`;
+  return `${appBase()}/done/${doneToken}`;
+}
+
+/** Absolute URL a recipient taps to skip an occurrence this cycle. */
+export function skipUrl(doneToken: string): string {
+  return `${appBase()}/skip/${doneToken}`;
+}
+
+function appBase(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -65,9 +73,11 @@ function layout(opts: {
   body: string; // inner HTML
   banner?: string; // optional coloured banner above the heading
   buttonUrl?: string; // optional "Mark as done" button
+  skipUrl?: string; // optional lower-emphasis "Skip" link under the button
   footerNote?: string; // optional small print above the sign-off
 }): string {
-  const { preheader, heading, body, banner, buttonUrl, footerNote } = opts;
+  const { preheader, heading, body, banner, buttonUrl, skipUrl, footerNote } =
+    opts;
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -104,12 +114,19 @@ function layout(opts: {
             </tr>
             ${
               buttonUrl
-                ? `<tr><td style="padding:8px 28px 24px;">
+                ? `<tr><td style="padding:8px 28px ${skipUrl ? "6px" : "24px"};">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr><td style="border-radius:12px;background:${ACCENT};">
                     <a href="${buttonUrl}" style="display:inline-block;padding:13px 24px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">✅ Mark as done</a>
                   </td></tr>
                 </table>
+              </td></tr>`
+                : ""
+            }
+            ${
+              buttonUrl && skipUrl
+                ? `<tr><td style="padding:0 28px 24px;">
+                <a href="${skipUrl}" style="font-size:13px;color:#9aa0ad;text-decoration:underline;">Can't do it this time? Skip →</a>
               </td></tr>`
                 : ""
             }
@@ -149,7 +166,8 @@ function dueLine(deadline: Deadline): string {
 export function renderEmail(
   type: EmailType,
   deadline: Deadline,
-  doneHref?: string
+  doneHref?: string,
+  skipHref?: string
 ): RenderedEmail {
   const title = deadline.title;
   let baseSubject: string;
@@ -219,27 +237,37 @@ export function renderEmail(
     body,
     banner,
     buttonUrl: showButton ? doneHref : undefined,
+    skipUrl: showButton ? skipHref : undefined,
     footerNote: showButton
       ? "Tapping “✅ Mark as done” stops these reminders — no login needed."
       : undefined,
   });
 
-  const text = htmlToText(heading, body, showButton ? doneHref : undefined);
+  const text = htmlToText(
+    heading,
+    body,
+    showButton ? doneHref : undefined,
+    showButton ? skipHref : undefined
+  );
 
   return { subject, html, text };
 }
 
 /** Very small HTML→text fallback for the plain-text part. */
-function htmlToText(heading: string, body: string, doneHref?: string): string {
+function htmlToText(
+  heading: string,
+  body: string,
+  doneHref?: string,
+  skipHref?: string
+): string {
   const stripped = body
     .replace(/<\/p>/g, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/\n{2,}/g, "\n")
     .trim();
-  const cta = doneHref
-    ? `\n\nMark as done: ${doneHref}`
-    : "";
-  return `${heading}\n\n${stripped}${cta}`;
+  const cta = doneHref ? `\n\nMark as done: ${doneHref}` : "";
+  const skip = skipHref ? `\nSkip this time: ${skipHref}` : "";
+  return `${heading}\n\n${stripped}${cta}${skip}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +296,8 @@ export async function sendDeadlineEmail({
   }
 
   const href = doneToken ? doneUrl(doneToken) : undefined;
-  const { subject, html, text } = renderEmail(type, deadline, href);
+  const skipHref = doneToken ? skipUrl(doneToken) : undefined;
+  const { subject, html, text } = renderEmail(type, deadline, href, skipHref);
   const resend = getResend();
 
   const { data, error } = await resend.emails.send({

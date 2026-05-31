@@ -155,6 +155,17 @@ export default function Calendar({ deadlines, occurrences }: CalendarProps) {
                       </span>
                     );
                   }
+                  if (n.skipped) {
+                    return (
+                      <span
+                        key={`nag-${n.deadline.id}-${idx}`}
+                        title={`${n.deadline.title} — skipped this cycle`}
+                        className="leading-none grayscale opacity-40"
+                      >
+                        ⏭️
+                      </span>
+                    );
+                  }
                   if (n.stagesSent > 0) {
                     return (
                       <span
@@ -190,6 +201,7 @@ export default function Calendar({ deadlines, occurrences }: CalendarProps) {
         <LegendItem emoji="🚨" label="Urgent deadline" />
         <LegendItem emoji="❗" label="Reminder sent" />
         <LegendItem emoji="✅" label="Done" />
+        <LegendSkip label="Skipped" />
         <LegendSlot label="Reminder day" />
       </div>
     </div>
@@ -209,6 +221,15 @@ function LegendSlot({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="inline-block h-3 w-3 rounded-full border border-dashed border-slate-300" />
+      {label}
+    </span>
+  );
+}
+
+function LegendSkip({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="leading-none grayscale opacity-40">⏭️</span>
       {label}
     </span>
   );

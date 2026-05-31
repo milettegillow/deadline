@@ -11,7 +11,7 @@ import {
 } from "@/lib/types";
 import { sendDeadlineEmail } from "@/lib/email";
 import { currentOccurrenceDate } from "@/lib/engine";
-import { completeOccurrenceById } from "@/lib/complete";
+import { resolveOccurrenceById, type Resolution } from "@/lib/complete";
 
 export interface ActionResult {
   error?: string;
@@ -194,12 +194,14 @@ export async function sendTestReminder(
 }
 
 /**
- * Mark the deadline's CURRENT occurrence as done, stopping further reminders
- * and emailing all recipients the 'completed' note. Shares the exact same
- * underlying logic (completeOccurrenceById) as the public /done link.
+ * Resolve the deadline's CURRENT occurrence (done or skipped), stopping further
+ * reminders. Ensures the occurrence row exists (it may not if no reminder has
+ * fired yet), then runs the shared resolve logic — the same code path as the
+ * public /done and /skip links. 'done' emails recipients; 'skipped' does not.
  */
-export async function markOccurrenceDone(
-  deadlineId: string
+async function resolveCurrentOccurrence(
+  deadlineId: string,
+  resolution: Resolution
 ): Promise<ActionResult> {
   const supabase = createClient();
   const {
@@ -216,10 +218,8 @@ export async function markOccurrenceDone(
 
   const deadline = rowToDeadline(row as DeadlineRow);
   const occurrenceDate = currentOccurrenceDate(deadline);
-  if (!occurrenceDate) return { error: "No current occurrence to mark." };
+  if (!occurrenceDate) return { error: "No current occurrence." };
 
-  // Ensure the occurrence row exists (it may not if no reminder has fired yet),
-  // then run the shared completion logic.
   const { data: occ, error: occErr } = await supabase
     .from("occurrences")
     .upsert(
@@ -232,14 +232,29 @@ export async function markOccurrenceDone(
     return { error: occErr?.message ?? "Could not update the occurrence." };
   }
 
-  const result = await completeOccurrenceById(
+  const result = await resolveOccurrenceById(
     supabase,
-    (occ as { id: string }).id
+    (occ as { id: string }).id,
+    resolution
   );
   if (result.status === "error") return { error: result.message };
 
   revalidatePath("/");
   return {};
+}
+
+/** Mark the current occurrence done (emails recipients the 'completed' note). */
+export async function markOccurrenceDone(
+  deadlineId: string
+): Promise<ActionResult> {
+  return resolveCurrentOccurrence(deadlineId, "done");
+}
+
+/** Skip the current occurrence this cycle (no email; future occurrences unaffected). */
+export async function skipOccurrence(
+  deadlineId: string
+): Promise<ActionResult> {
+  return resolveCurrentOccurrence(deadlineId, "skipped");
 }
 
 export async function signOut() {

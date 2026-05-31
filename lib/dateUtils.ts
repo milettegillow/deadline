@@ -178,6 +178,7 @@ export interface NagMark {
   /** Nag-day stages sent so far (0..3) → ❗ count. */
   stagesSent: number;
   done: boolean;
+  skipped: boolean;
 }
 
 export interface DayMarkers {
@@ -231,6 +232,7 @@ export function buildMonthMarkers(
           occurrenceDate: iso,
           stagesSent: occ ? stagesSent(occ) : 0,
           done: occ?.status === "done",
+          skipped: occ?.status === "skipped",
         });
       }
     }

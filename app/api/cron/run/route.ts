@@ -88,7 +88,7 @@ async function run(request: Request) {
         { onConflict: "deadline_id,occurrence_date" }
       )
       .select(
-        "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, done_token, created_at"
+        "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, skipped_at, done_token, created_at"
       )
       .single();
 
@@ -104,11 +104,12 @@ async function run(request: Request) {
 
     const occ = rowToOccurrence(occRow as OccurrenceRow);
 
-    if (occ.status === "done") {
+    // Done or skipped → resolved; stop sending for this occurrence.
+    if (occ.status !== "pending") {
       results.push({
         deadline: deadline.id,
         occurrenceDate: occDate,
-        action: "done",
+        action: occ.status, // "done" or "skipped"
       });
       continue;
     }
