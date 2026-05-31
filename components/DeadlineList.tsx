@@ -127,7 +127,19 @@ function DeadlineRow({
   }
 
   return (
-    <li className="group rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:shadow-sm">
+    <li
+      onClick={() => onEdit(d)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit(d);
+        }
+      }}
+      aria-label={`Edit ${d.title}`}
+      className="group cursor-pointer rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -172,14 +184,10 @@ function DeadlineRow({
 
         <div className="flex shrink-0 items-center gap-1">
           <button
-            onClick={() => onEdit(d)}
-            aria-label={`Edit ${d.title}`}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-          >
-            <EditIcon />
-          </button>
-          <button
-            onClick={handleDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
             disabled={pending}
             aria-label={`Delete ${d.title}`}
             className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
@@ -193,7 +201,10 @@ function DeadlineRow({
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
         {!isResolved && (
           <button
-            onClick={handleMarkDone}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMarkDone();
+            }}
             disabled={donePending}
             className="inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-emerald-600 transition hover:text-emerald-700 disabled:opacity-60"
           >
@@ -203,7 +214,10 @@ function DeadlineRow({
         )}
         {!isResolved && (
           <button
-            onClick={handleSkip}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSkip();
+            }}
             disabled={skipPending}
             className="inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-slate-500 transition hover:text-slate-700 disabled:opacity-60"
           >
@@ -212,7 +226,10 @@ function DeadlineRow({
           </button>
         )}
         <button
-          onClick={handleTest}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleTest();
+          }}
           disabled={testPending}
           className="inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-accent-600 transition hover:text-accent-700 disabled:opacity-60"
         >
@@ -275,20 +292,6 @@ function MailIcon() {
       />
       <path
         d="m3.5 6.5 8.5 7 8.5-7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"

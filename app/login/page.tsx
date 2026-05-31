@@ -34,10 +34,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span
-            className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-500 text-2xl shadow-sm"
-            aria-hidden
-          >
+          <span className="mb-4 text-5xl leading-none" aria-hidden>
             🚩
           </span>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
