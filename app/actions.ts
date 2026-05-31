@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { DeadlineFormValues } from "@/lib/types";
+import { rowToDeadline, type DeadlineFormValues, type DeadlineRow } from "@/lib/types";
+import { sendDeadlineEmail } from "@/lib/email";
+
+const DEADLINE_SELECT =
+  "id, title, deadline_date, recurrence, weekday, day_of_month, lead_days, urgency, created_at, deadline_recipients(id, email)";
 
 export interface ActionResult {
   error?: string;
@@ -119,6 +123,52 @@ export async function deleteDeadline(id: string): Promise<ActionResult> {
   if (error) return { error: error.message };
 
   revalidatePath("/");
+  return {};
+}
+
+/**
+ * Send a one-off TEST 'reminder' email to a deadline's recipients so the owner
+ * can check delivery and appearance. This is not the real schedule — that
+ * arrives in a later prompt. Protected: only the deadline's owner can trigger
+ * it (enforced by auth + RLS on the lookup).
+ */
+export async function sendTestReminder(
+  deadlineId: string
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  // RLS guarantees this only returns a deadline the user owns.
+  const { data: row, error } = await supabase
+    .from("deadlines")
+    .select(DEADLINE_SELECT)
+    .eq("id", deadlineId)
+    .single();
+
+  if (error || !row) {
+    return { error: "Deadline not found." };
+  }
+
+  const deadline = rowToDeadline(row as DeadlineRow);
+  if (deadline.recipients.length === 0) {
+    return { error: "Add at least one recipient first." };
+  }
+
+  try {
+    await sendDeadlineEmail({
+      type: "reminder",
+      deadline,
+      recipients: deadline.recipients,
+    });
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Could not send the email.",
+    };
+  }
+
   return {};
 }
 

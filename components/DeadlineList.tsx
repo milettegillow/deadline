@@ -1,9 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { Deadline } from "@/lib/types";
 import { describeRecurrence, nextOccurrenceLabel } from "@/lib/dateUtils";
-import { deleteDeadline } from "@/app/actions";
+import { deleteDeadline, sendTestReminder } from "@/app/actions";
 
 interface DeadlineListProps {
   deadlines: Deadline[];
@@ -51,11 +51,32 @@ function DeadlineRow({
   onEdit: (d: Deadline) => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [testPending, startTestTransition] = useTransition();
+  const [testStatus, setTestStatus] = useState<
+    { kind: "ok" | "error"; message: string } | null
+  >(null);
 
   function handleDelete() {
     if (!confirm(`Delete “${d.title}”?`)) return;
     startTransition(() => {
       deleteDeadline(d.id);
+    });
+  }
+
+  function handleTest() {
+    setTestStatus(null);
+    startTestTransition(async () => {
+      const result = await sendTestReminder(d.id);
+      if (result.error) {
+        setTestStatus({ kind: "error", message: result.error });
+      } else {
+        setTestStatus({
+          kind: "ok",
+          message: `Sent to ${d.recipients.length} recipient${
+            d.recipients.length === 1 ? "" : "s"
+          }.`,
+        });
+      }
     });
   }
 
@@ -102,7 +123,51 @@ function DeadlineRow({
           </button>
         </div>
       </div>
+
+      {/* Test-only: send the 'reminder' template now to check delivery. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
+        <button
+          onClick={handleTest}
+          disabled={testPending}
+          className="inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-accent-600 transition hover:text-accent-700 disabled:opacity-60"
+        >
+          <MailIcon />
+          {testPending ? "Sending…" : "Send test reminder"}
+        </button>
+        {testStatus && (
+          <span
+            className={
+              testStatus.kind === "ok"
+                ? "text-xs text-emerald-600"
+                : "text-xs text-red-600"
+            }
+          >
+            {testStatus.message}
+          </span>
+        )}
+      </div>
     </li>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m3.5 6.5 8.5 7 8.5-7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
