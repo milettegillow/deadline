@@ -16,6 +16,9 @@ import {
 
 interface DeadlineFormPanelProps {
   userEmail: string;
+  /** Defaults applied to NEW deadlines (from user settings). */
+  defaultRecipients: string[];
+  defaultLeadDays: number;
   /** null = creating a new deadline; otherwise editing this one. */
   deadline: Deadline | null;
   onClose: () => void;
@@ -23,6 +26,8 @@ interface DeadlineFormPanelProps {
 
 export default function DeadlineFormPanel({
   userEmail,
+  defaultRecipients,
+  defaultLeadDays,
   deadline,
   onClose,
 }: DeadlineFormPanelProps) {
@@ -37,13 +42,20 @@ export default function DeadlineFormPanel({
   );
   const [weekday, setWeekday] = useState(deadline?.weekday ?? 4); // Thursday
   const [dayOfMonth, setDayOfMonth] = useState(deadline?.dayOfMonth ?? 1);
-  const [leadDays, setLeadDays] = useState(deadline?.leadDays ?? 1);
+  const [leadDays, setLeadDays] = useState(
+    deadline?.leadDays ?? defaultLeadDays
+  );
   const [urgency, setUrgency] = useState<Urgency>(
     deadline?.urgency ?? "regular"
   );
   // Recipients default to the user's own email for a new deadline.
   const [recipients, setRecipients] = useState<string[]>(
-    deadline?.recipients ?? (userEmail ? [userEmail] : [])
+    deadline?.recipients ??
+      (defaultRecipients.length > 0
+        ? defaultRecipients
+        : userEmail
+        ? [userEmail]
+        : [])
   );
   const [emailDraft, setEmailDraft] = useState("");
 

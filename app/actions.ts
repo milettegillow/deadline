@@ -257,6 +257,41 @@ export async function skipOccurrence(
   return resolveCurrentOccurrence(deadlineId, "skipped");
 }
 
+export interface UserSettingsValues {
+  defaultRecipients: string[];
+  defaultLeadDays: number;
+}
+
+/** Upsert the signed-in user's settings (defaults for new deadlines). */
+export async function saveUserSettings(
+  values: UserSettingsValues
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const recipients = cleanRecipients(values.defaultRecipients);
+  const leadDays = Number.isFinite(values.defaultLeadDays)
+    ? Math.max(0, Math.min(30, Math.round(values.defaultLeadDays)))
+    : 1;
+
+  const { error } = await supabase.from("user_settings").upsert(
+    {
+      user_id: user.id,
+      default_recipient_emails: recipients,
+      default_lead_days: leadDays,
+    },
+    { onConflict: "user_id" }
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+  return {};
+}
+
 export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();

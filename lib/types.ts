@@ -123,3 +123,29 @@ export function rowToDeadline(row: DeadlineRow): Deadline {
     recipients: (row.deadline_recipients ?? []).map((r) => r.email),
   };
 }
+
+// ---------------------------------------------------------------------------
+// User settings (defaults applied to NEW deadlines)
+// ---------------------------------------------------------------------------
+
+export interface UserSettingsRow {
+  user_id: string;
+  default_recipient_emails: string[];
+  default_lead_days: number;
+  created_at: string;
+}
+
+export interface UserSettings {
+  defaultRecipients: string[];
+  defaultLeadDays: number;
+}
+
+export const USER_SETTINGS_SELECT =
+  "user_id, default_recipient_emails, default_lead_days, created_at";
+
+export function rowToUserSettings(r: UserSettingsRow): UserSettings {
+  return {
+    defaultRecipients: r.default_recipient_emails ?? [],
+    defaultLeadDays: r.default_lead_days,
+  };
+}

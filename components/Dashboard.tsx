@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Calendar from "@/components/Calendar";
 import DeadlineList from "@/components/DeadlineList";
 import DeadlineFormPanel from "@/components/DeadlineFormPanel";
@@ -11,12 +12,16 @@ interface DashboardProps {
   userEmail: string;
   deadlines: Deadline[];
   occurrences: Occurrence[];
+  defaultRecipients: string[];
+  defaultLeadDays: number;
 }
 
 export default function Dashboard({
   userEmail,
   deadlines,
   occurrences,
+  defaultRecipients,
+  defaultLeadDays,
 }: DashboardProps) {
   // `null` = panel closed. A Deadline = editing it. "new" = creating.
   const [editing, setEditing] = useState<Deadline | "new" | null>(null);
@@ -43,6 +48,14 @@ export default function Dashboard({
               <span className="hidden sm:inline">New deadline</span>
               <span className="sm:hidden">New</span>
             </button>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              title="Settings"
+              className="rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              <GearIcon />
+            </Link>
             <SignOutButton />
           </div>
         </div>
@@ -75,6 +88,8 @@ export default function Dashboard({
         <DeadlineFormPanel
           key={editing === "new" ? "new" : editing.id}
           userEmail={userEmail}
+          defaultRecipients={defaultRecipients}
+          defaultLeadDays={defaultLeadDays}
           deadline={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
         />
@@ -90,6 +105,27 @@ function PlusIcon() {
         d="M12 5v14M5 12h14"
         stroke="currentColor"
         strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+        stroke="currentColor"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
