@@ -42,13 +42,15 @@ export default function DeadlineFormPanel({
   );
   const [weekday, setWeekday] = useState(deadline?.weekday ?? 4); // Thursday
   const [dayOfMonth, setDayOfMonth] = useState(deadline?.dayOfMonth ?? 1);
+  const [lastDayOfMonth, setLastDayOfMonth] = useState(
+    deadline?.lastDayOfMonth ?? false
+  );
   const [leadDays, setLeadDays] = useState(
     deadline?.leadDays ?? defaultLeadDays
   );
   const [urgency, setUrgency] = useState<Urgency>(
     deadline?.urgency ?? "regular"
   );
-  // Recipients default to the user's own email for a new deadline.
   const [recipients, setRecipients] = useState<string[]>(
     deadline?.recipients ??
       (defaultRecipients.length > 0
@@ -61,6 +63,21 @@ export default function DeadlineFormPanel({
 
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Monthly selector value: "last" or a day number as a string.
+  const monthlyValue = lastDayOfMonth ? "last" : String(dayOfMonth);
+  // Days 1–28 only; preserve a legacy 29–31 value if an existing deadline uses one.
+  const dayOptions: number[] = Array.from({ length: 28 }, (_, i) => i + 1);
+  if (!lastDayOfMonth && dayOfMonth > 28) dayOptions.push(dayOfMonth);
+
+  function handleMonthlyChange(value: string) {
+    if (value === "last") {
+      setLastDayOfMonth(true);
+    } else {
+      setLastDayOfMonth(false);
+      setDayOfMonth(Number(value));
+    }
+  }
 
   function addRecipient() {
     const value = emailDraft.trim();
@@ -94,6 +111,7 @@ export default function DeadlineFormPanel({
       recurrence,
       weekday,
       dayOfMonth,
+      lastDayOfMonth,
       leadDays,
       urgency,
       recipients: finalRecipients,
@@ -162,19 +180,9 @@ export default function DeadlineFormPanel({
             />
           </Field>
 
-          {/* Deadline date */}
-          <Field label="Deadline date">
-            <input
-              type="date"
-              value={deadlineDate}
-              onChange={(e) => setDeadlineDate(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-
-          {/* Recurrence */}
-          <Field label="Recurrence">
-            <div className="flex flex-col gap-2">
+          {/* Schedule: recurrence + a single contextual "when" control */}
+          <Field label="Schedule">
+            <div className="flex flex-col gap-3">
               <SegmentedControl
                 value={recurrence}
                 onChange={(v) => setRecurrence(v as RecurrenceType)}
@@ -184,6 +192,21 @@ export default function DeadlineFormPanel({
                   { value: "monthly", label: "Monthly" },
                 ]}
               />
+
+              {recurrence === "none" && (
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-slate-500">
+                    Deadline date
+                  </span>
+                  <input
+                    type="date"
+                    value={deadlineDate}
+                    onChange={(e) => setDeadlineDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              )}
+
               {recurrence === "weekly" && (
                 <select
                   value={weekday}
@@ -197,17 +220,19 @@ export default function DeadlineFormPanel({
                   ))}
                 </select>
               )}
+
               {recurrence === "monthly" && (
                 <select
-                  value={dayOfMonth}
-                  onChange={(e) => setDayOfMonth(Number(e.target.value))}
+                  value={monthlyValue}
+                  onChange={(e) => handleMonthlyChange(e.target.value)}
                   className={inputClass}
                 >
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                  {dayOptions.map((day) => (
                     <option key={day} value={day}>
                       Day {day} of every month
                     </option>
                   ))}
+                  <option value="last">Last day of the month</option>
                 </select>
               )}
             </div>

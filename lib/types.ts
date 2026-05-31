@@ -7,13 +7,15 @@ export type Urgency = "regular" | "urgent";
 export interface Deadline {
   id: string;
   title: string;
-  /** ISO date string, YYYY-MM-DD */
-  deadlineDate: string;
+  /** ISO date string YYYY-MM-DD; null for recurring deadlines. */
+  deadlineDate: string | null;
   recurrence: RecurrenceType;
   /** 0 = Sunday … 6 = Saturday, only set when recurrence === "weekly". */
   weekday: number | null;
-  /** 1..31, only set when recurrence === "monthly". */
+  /** 1..28, only set when recurrence === "monthly" and not last-day. */
   dayOfMonth: number | null;
+  /** When true, a monthly deadline falls on the actual last day each month. */
+  lastDayOfMonth: boolean;
   /** Days before the deadline to start nagging. */
   leadDays: number;
   urgency: Urgency;
@@ -24,10 +26,11 @@ export interface Deadline {
 export interface DeadlineRow {
   id: string;
   title: string;
-  deadline_date: string;
+  deadline_date: string | null;
   recurrence: RecurrenceType;
   weekday: number | null;
   day_of_month: number | null;
+  last_day_of_month: boolean;
   lead_days: number;
   urgency: Urgency;
   created_at: string;
@@ -41,6 +44,7 @@ export interface DeadlineFormValues {
   recurrence: RecurrenceType;
   weekday: number;
   dayOfMonth: number;
+  lastDayOfMonth: boolean;
   leadDays: number;
   urgency: Urgency;
   recipients: string[];
@@ -48,7 +52,7 @@ export interface DeadlineFormValues {
 
 /** Column list for selecting a deadline plus its joined recipients. */
 export const DEADLINE_SELECT =
-  "id, title, deadline_date, recurrence, weekday, day_of_month, lead_days, urgency, created_at, deadline_recipients(id, email)";
+  "id, title, deadline_date, recurrence, weekday, day_of_month, last_day_of_month, lead_days, urgency, created_at, deadline_recipients(id, email)";
 
 export type OccurrenceStatus = "pending" | "done" | "skipped";
 
@@ -118,6 +122,7 @@ export function rowToDeadline(row: DeadlineRow): Deadline {
     recurrence: row.recurrence,
     weekday: row.weekday,
     dayOfMonth: row.day_of_month,
+    lastDayOfMonth: row.last_day_of_month,
     leadDays: row.lead_days,
     urgency: row.urgency,
     recipients: (row.deadline_recipients ?? []).map((r) => r.email),

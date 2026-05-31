@@ -50,12 +50,19 @@ export function currentOccurrenceDate(
     return null;
   }
 
-  if (deadline.recurrence === "monthly" && deadline.dayOfMonth != null) {
+  if (deadline.recurrence === "monthly") {
     const monthStart = today.startOf("month");
     for (let i = 0; i < 24; i++) {
       const month = monthStart.plus({ months: i });
-      if (deadline.dayOfMonth <= (month.daysInMonth ?? 31)) {
-        const date = month.set({ day: deadline.dayOfMonth });
+      const lastDay = month.daysInMonth ?? 31;
+      let day: number | null = null;
+      if (deadline.lastDayOfMonth) {
+        day = lastDay;
+      } else if (deadline.dayOfMonth != null && deadline.dayOfMonth <= lastDay) {
+        day = deadline.dayOfMonth;
+      }
+      if (day != null) {
+        const date = month.set({ day });
         if (date >= today) return date.toISODate();
       }
     }

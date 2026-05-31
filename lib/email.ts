@@ -153,6 +153,8 @@ function paragraph(text: string): string {
 }
 
 function dueLine(deadline: Deadline): string {
+  // Recurring deadlines have no fixed date — skip the "Due …" line for them.
+  if (!deadline.deadlineDate) return "";
   return `<p style="margin:0 0 12px;color:#6b7280;font-size:14px;">Due ${formatDateLabel(
     deadline.deadlineDate
   )}.</p>`;

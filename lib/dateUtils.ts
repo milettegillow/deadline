@@ -67,6 +67,7 @@ export function describeRecurrence(d: {
   recurrence: RecurrenceType;
   weekday: number | null;
   dayOfMonth: number | null;
+  lastDayOfMonth?: boolean;
 }): string {
   switch (d.recurrence) {
     case "none":
@@ -74,6 +75,7 @@ export function describeRecurrence(d: {
     case "weekly":
       return d.weekday == null ? "Weekly" : `Every ${WEEKDAYS[d.weekday]}`;
     case "monthly":
+      if (d.lastDayOfMonth) return "Last day of every month";
       return d.dayOfMonth == null
         ? "Monthly"
         : `${d.dayOfMonth}${ordinalSuffix(d.dayOfMonth)} of every month`;
@@ -111,18 +113,27 @@ export function nextOccurrenceLabel(d: Deadline, from = new Date()): string {
     const day = addDays(base, i);
     if (occursOn(d, day)) return formatDateLabel(toISODate(day));
   }
-  return formatDateLabel(d.deadlineDate);
+  return d.deadlineDate ? formatDateLabel(d.deadlineDate) : "—";
 }
 
 /** Does this deadline have an occurrence on the given date? */
 export function occursOn(d: Deadline, date: Date): boolean {
   switch (d.recurrence) {
     case "none":
-      return d.deadlineDate === toISODate(date);
+      return d.deadlineDate != null && d.deadlineDate === toISODate(date);
     case "weekly":
       return d.weekday != null && date.getDay() === d.weekday;
-    case "monthly":
+    case "monthly": {
+      if (d.lastDayOfMonth) {
+        const last = new Date(
+          date.getFullYear(),
+          date.getMonth() + 1,
+          0
+        ).getDate();
+        return date.getDate() === last;
+      }
       return d.dayOfMonth != null && date.getDate() === d.dayOfMonth;
+    }
   }
 }
 
@@ -136,17 +147,21 @@ export function occurrencesForMonth(
   const out: string[] = [];
 
   if (d.recurrence === "none") {
-    const dd = fromISODate(d.deadlineDate);
-    if (dd.getFullYear() === year && dd.getMonth() === month) {
-      out.push(d.deadlineDate);
+    if (d.deadlineDate) {
+      const dd = fromISODate(d.deadlineDate);
+      if (dd.getFullYear() === year && dd.getMonth() === month) {
+        out.push(d.deadlineDate);
+      }
     }
   } else if (d.recurrence === "weekly" && d.weekday != null) {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       if (date.getDay() === d.weekday) out.push(toISODate(date));
     }
-  } else if (d.recurrence === "monthly" && d.dayOfMonth != null) {
-    if (d.dayOfMonth <= daysInMonth) {
+  } else if (d.recurrence === "monthly") {
+    if (d.lastDayOfMonth) {
+      out.push(toISODate(new Date(year, month, daysInMonth)));
+    } else if (d.dayOfMonth != null && d.dayOfMonth <= daysInMonth) {
       out.push(toISODate(new Date(year, month, d.dayOfMonth)));
     }
   }

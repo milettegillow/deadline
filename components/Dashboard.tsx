@@ -68,8 +68,8 @@ export default function Dashboard({
             Never miss a deadline again
           </h1>
           <p className="mt-2 max-w-xl text-slate-500">
-            Set a deadline and a friendly email assistant nags you the day
-            before — and keeps nagging until you reply that it&apos;s done.
+            A friendly email assistant to nudge you the day before each
+            deadline
           </p>
         </div>
 

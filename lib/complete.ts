@@ -16,7 +16,7 @@ export type ResolveResult =
 
 // Occurrence + its parent deadline + recipients, in one query.
 const OCC_WITH_DEADLINE =
-  "id, status, deadlines(id, title, deadline_date, recurrence, weekday, day_of_month, lead_days, urgency, deadline_recipients(id, email))";
+  "id, status, deadlines(id, title, deadline_date, recurrence, weekday, day_of_month, last_day_of_month, lead_days, urgency, deadline_recipients(id, email))";
 
 /**
  * The single source of truth for resolving an occurrence: flips a *pending*

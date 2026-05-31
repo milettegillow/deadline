@@ -22,10 +22,15 @@ function toRow(values: DeadlineFormValues, userId: string) {
   return {
     user_id: userId,
     title: values.title.trim(),
-    deadline_date: values.deadlineDate,
+    deadline_date: values.recurrence === "none" ? values.deadlineDate : null,
     recurrence: values.recurrence,
     weekday: values.recurrence === "weekly" ? values.weekday : null,
-    day_of_month: values.recurrence === "monthly" ? values.dayOfMonth : null,
+    day_of_month:
+      values.recurrence === "monthly" && !values.lastDayOfMonth
+        ? values.dayOfMonth
+        : null,
+    last_day_of_month:
+      values.recurrence === "monthly" ? values.lastDayOfMonth : false,
     lead_days: values.leadDays,
     urgency: values.urgency,
   };
