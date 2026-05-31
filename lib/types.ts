@@ -63,6 +63,7 @@ export interface OccurrenceRow {
   last_chance_sent_at: string | null;
   due_today_sent_at: string | null;
   done_at: string | null;
+  done_token: string;
   created_at: string;
 }
 
@@ -77,10 +78,11 @@ export interface Occurrence {
   lastChanceSentAt: string | null;
   dueTodaySentAt: string | null;
   doneAt: string | null;
+  doneToken: string;
 }
 
 export const OCCURRENCE_SELECT =
-  "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at";
+  "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, done_token";
 
 export function rowToOccurrence(r: OccurrenceRow): Occurrence {
   return {
@@ -93,6 +95,7 @@ export function rowToOccurrence(r: OccurrenceRow): Occurrence {
     lastChanceSentAt: r.last_chance_sent_at,
     dueTodaySentAt: r.due_today_sent_at,
     doneAt: r.done_at,
+    doneToken: r.done_token,
   };
 }
 

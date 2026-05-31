@@ -19,6 +19,21 @@ export type EmailType =
   | "due_today"
   | "completed";
 
+/** The email types that carry a one-tap "Mark as done" button. */
+const HAS_DONE_BUTTON: Record<EmailType, boolean> = {
+  reminder: true,
+  follow_up: true,
+  last_chance: true,
+  due_today: true,
+  completed: false,
+};
+
+/** Absolute URL a recipient taps to mark an occurrence done (no login needed). */
+export function doneUrl(doneToken: string): string {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  return `${base}/done/${doneToken}`;
+}
+
 // ---------------------------------------------------------------------------
 // Resend client (instantiated lazily so the build never needs the key)
 // ---------------------------------------------------------------------------
@@ -49,8 +64,10 @@ function layout(opts: {
   heading: string;
   body: string; // inner HTML
   banner?: string; // optional coloured banner above the heading
+  buttonUrl?: string; // optional "Mark as done" button
+  footerNote?: string; // optional small print above the sign-off
 }): string {
-  const { preheader, heading, body, banner } = opts;
+  const { preheader, heading, body, banner, buttonUrl, footerNote } = opts;
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -81,17 +98,28 @@ function layout(opts: {
               </td>
             </tr>
             <tr>
-              <td style="padding:0 28px 24px;font-size:15px;line-height:1.6;color:#4a4a57;">
+              <td style="padding:0 28px ${buttonUrl ? "8px" : "24px"};font-size:15px;line-height:1.6;color:#4a4a57;">
                 ${body}
               </td>
             </tr>
-            <tr>
-              <td style="padding:16px 28px 24px;border-top:1px solid #f0f1f5;">
-                <p style="margin:0;font-size:13px;line-height:1.5;color:#9aa0ad;">
-                  Just reply <strong>“done”</strong> to this email and I'll stop reminding you.
-                </p>
-              </td>
-            </tr>
+            ${
+              buttonUrl
+                ? `<tr><td style="padding:8px 28px 24px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr><td style="border-radius:12px;background:${ACCENT};">
+                    <a href="${buttonUrl}" style="display:inline-block;padding:13px 24px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">✅ Mark as done</a>
+                  </td></tr>
+                </table>
+              </td></tr>`
+                : ""
+            }
+            ${
+              footerNote
+                ? `<tr><td style="padding:16px 28px 24px;border-top:1px solid #f0f1f5;">
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#9aa0ad;">${footerNote}</p>
+              </td></tr>`
+                : ""
+            }
           </table>
           <p style="margin:16px 0 0;font-size:12px;color:#b5bac4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
             Your friendly Deadline assistant
@@ -113,8 +141,16 @@ function dueLine(deadline: Deadline): string {
   )}.</p>`;
 }
 
-/** Build the subject + html + text for a given email type and deadline. */
-export function renderEmail(type: EmailType, deadline: Deadline): RenderedEmail {
+/**
+ * Build the subject + html + text for a given email type and deadline.
+ * `doneHref`, when provided, renders the one-tap "Mark as done" button on the
+ * reminder / follow_up / last_chance / due_today templates.
+ */
+export function renderEmail(
+  type: EmailType,
+  deadline: Deadline,
+  doneHref?: string
+): RenderedEmail {
   const title = deadline.title;
   let baseSubject: string;
   let heading: string;
@@ -128,7 +164,7 @@ export function renderEmail(type: EmailType, deadline: Deadline): RenderedEmail 
       body =
         paragraph(`Just a friendly nudge — this is on your list for today.`) +
         dueLine(deadline) +
-        paragraph(`Reply <strong>“done”</strong> once it's sorted.`);
+        paragraph(`Tap the button below once it's sorted.`);
       break;
 
     case "follow_up":
@@ -138,7 +174,7 @@ export function renderEmail(type: EmailType, deadline: Deadline): RenderedEmail 
         paragraph(`Quick check-in — did you get a chance to ${title}?`) +
         dueLine(deadline) +
         paragraph(
-          `If it's handled, reply <strong>“done”</strong>. Otherwise I'll keep gently nudging.`
+          `If it's handled, tap the button below. Otherwise I'll keep gently nudging.`
         );
       break;
 
@@ -146,9 +182,11 @@ export function renderEmail(type: EmailType, deadline: Deadline): RenderedEmail 
       baseSubject = `Last chance: ${title}!`;
       heading = `Last chance: ${title}!`;
       body =
-        paragraph(`This is your last nudge — <strong>${title}</strong> still needs doing.`) +
+        paragraph(
+          `This is your last nudge — <strong>${title}</strong> still needs doing.`
+        ) +
         dueLine(deadline) +
-        paragraph(`Reply <strong>“done”</strong> the moment it's finished.`);
+        paragraph(`Tap the button below the moment it's finished.`);
       break;
 
     case "due_today":
@@ -157,7 +195,7 @@ export function renderEmail(type: EmailType, deadline: Deadline): RenderedEmail 
       banner = `🚩 Due today`;
       body =
         paragraph(`This is the day — <strong>${title}</strong> is due today.`) +
-        paragraph(`Reply <strong>“done”</strong> when it's complete and I'll close it out.`);
+        paragraph(`Tap the button below when it's complete and I'll close it out.`);
       break;
 
     case "completed":
@@ -173,26 +211,35 @@ export function renderEmail(type: EmailType, deadline: Deadline): RenderedEmail 
   const subject =
     deadline.urgency === "urgent" ? `🚨 ${baseSubject}` : baseSubject;
 
+  const showButton = HAS_DONE_BUTTON[type] && !!doneHref;
+
   const html = layout({
     preheader: baseSubject,
     heading,
     body,
     banner,
+    buttonUrl: showButton ? doneHref : undefined,
+    footerNote: showButton
+      ? "Tapping “✅ Mark as done” stops these reminders — no login needed."
+      : undefined,
   });
 
-  const text = htmlToText(heading, body);
+  const text = htmlToText(heading, body, showButton ? doneHref : undefined);
 
   return { subject, html, text };
 }
 
 /** Very small HTML→text fallback for the plain-text part. */
-function htmlToText(heading: string, body: string): string {
+function htmlToText(heading: string, body: string, doneHref?: string): string {
   const stripped = body
     .replace(/<\/p>/g, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/\n{2,}/g, "\n")
     .trim();
-  return `${heading}\n\n${stripped}\n\nReply "done" to this email and I'll stop reminding you.`;
+  const cta = doneHref
+    ? `\n\nMark as done: ${doneHref}`
+    : "";
+  return `${heading}\n\n${stripped}${cta}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +251,8 @@ export interface SendDeadlineEmailArgs {
   deadline: Deadline;
   /** Defaults to the deadline's own recipient list. */
   recipients?: string[];
+  /** Occurrence done-token; renders the one-tap "Mark as done" button. */
+  doneToken?: string;
 }
 
 /** Render the correct template and send it via Resend. */
@@ -211,13 +260,15 @@ export async function sendDeadlineEmail({
   type,
   deadline,
   recipients,
+  doneToken,
 }: SendDeadlineEmailArgs) {
   const to = recipients ?? deadline.recipients;
   if (!to || to.length === 0) {
     throw new Error("No recipients to send to.");
   }
 
-  const { subject, html, text } = renderEmail(type, deadline);
+  const href = doneToken ? doneUrl(doneToken) : undefined;
+  const { subject, html, text } = renderEmail(type, deadline, href);
   const resend = getResend();
 
   const { data, error } = await resend.emails.send({

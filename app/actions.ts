@@ -11,6 +11,7 @@ import {
 } from "@/lib/types";
 import { sendDeadlineEmail } from "@/lib/email";
 import { currentOccurrenceDate } from "@/lib/engine";
+import { completeOccurrenceById } from "@/lib/complete";
 
 export interface ActionResult {
   error?: string;
@@ -160,11 +161,28 @@ export async function sendTestReminder(
     return { error: "Add at least one recipient first." };
   }
 
+  // Ensure the current occurrence exists so the test email's "Mark as done"
+  // button links to a real, working token.
+  let doneToken: string | undefined;
+  const occurrenceDate = currentOccurrenceDate(deadline);
+  if (occurrenceDate) {
+    const { data: occ } = await supabase
+      .from("occurrences")
+      .upsert(
+        { deadline_id: deadlineId, occurrence_date: occurrenceDate },
+        { onConflict: "deadline_id,occurrence_date" }
+      )
+      .select("done_token")
+      .single();
+    doneToken = (occ as { done_token: string } | null)?.done_token;
+  }
+
   try {
     await sendDeadlineEmail({
       type: "reminder",
       deadline,
       recipients: deadline.recipients,
+      doneToken,
     });
   } catch (e) {
     return {
@@ -176,9 +194,9 @@ export async function sendTestReminder(
 }
 
 /**
- * Mark the deadline's CURRENT occurrence as done, stopping further reminders.
- * Upserts the occurrence row (it may not exist yet if no reminder has fired).
- * Notifying other recipients with a 'completed' email is a later prompt.
+ * Mark the deadline's CURRENT occurrence as done, stopping further reminders
+ * and emailing all recipients the 'completed' note. Shares the exact same
+ * underlying logic (completeOccurrenceById) as the public /done link.
  */
 export async function markOccurrenceDone(
   deadlineId: string
@@ -200,16 +218,25 @@ export async function markOccurrenceDone(
   const occurrenceDate = currentOccurrenceDate(deadline);
   if (!occurrenceDate) return { error: "No current occurrence to mark." };
 
-  const { error } = await supabase.from("occurrences").upsert(
-    {
-      deadline_id: deadlineId,
-      occurrence_date: occurrenceDate,
-      status: "done",
-      done_at: new Date().toISOString(),
-    },
-    { onConflict: "deadline_id,occurrence_date" }
+  // Ensure the occurrence row exists (it may not if no reminder has fired yet),
+  // then run the shared completion logic.
+  const { data: occ, error: occErr } = await supabase
+    .from("occurrences")
+    .upsert(
+      { deadline_id: deadlineId, occurrence_date: occurrenceDate },
+      { onConflict: "deadline_id,occurrence_date" }
+    )
+    .select("id")
+    .single();
+  if (occErr || !occ) {
+    return { error: occErr?.message ?? "Could not update the occurrence." };
+  }
+
+  const result = await completeOccurrenceById(
+    supabase,
+    (occ as { id: string }).id
   );
-  if (error) return { error: error.message };
+  if (result.status === "error") return { error: result.message };
 
   revalidatePath("/");
   return {};

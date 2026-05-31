@@ -88,7 +88,7 @@ async function run(request: Request) {
         { onConflict: "deadline_id,occurrence_date" }
       )
       .select(
-        "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, created_at"
+        "id, deadline_id, occurrence_date, status, reminder_sent_at, follow_up_sent_at, last_chance_sent_at, due_today_sent_at, done_at, done_token, created_at"
       )
       .single();
 
@@ -151,6 +151,7 @@ async function run(request: Request) {
         type: stage.key,
         deadline,
         recipients: deadline.recipients,
+        doneToken: occ.doneToken,
       });
     } catch (e) {
       results.push({
